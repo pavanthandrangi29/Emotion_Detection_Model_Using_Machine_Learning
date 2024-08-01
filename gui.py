@@ -1,100 +1,42 @@
-import tkinter as tk
-from tkinter import filedialog
-from tkinter import *
-
-from sklearn import metrics
-
-from tensorflow.keras.models import model_from_json
-from PIL import Image, ImageTk
-import numpy as np
 import cv2
+from keras.models import load_model
+import numpy as np
 
-# donwload haarcascade_frontalface_default from here "https://github.com/opencv/opencv/tree/master/data/haarcascades"
+# Load the model from the saved file
+model = load_model("C:\\Users\\DELL\\OneDrive\\Desktop\\Emotion_detection\\Real_time_emotion\\archive (1)\\facialemotionmodel.h5")
+model.load_weights("C:\\Users\\DELL\\OneDrive\\Desktop\\Emotion_detection\\Real_time_emotion\\archive (1)\\facialemotionmodel.h5")
 
+haar_file = cv2.data.haarcascades + 'haarcascade_frontalface_default.xml'
+face_cascade = cv2.CascadeClassifier(haar_file)
 
-def FacialExpressionModel(json_file, weights_file):
-    with open(json_file, "r") as file:
-        loaded_model_json = file.read()
-        model = model_from_json(loaded_model_json)
+def extract_features(image):
+    feature = np.array(image)
+    feature = feature.reshape(1, 48, 48, 1)
+    return feature / 255.0
 
-    model.load_weights(weights_file)
-    model.compile(optimizer='adam',
-                  loss='categorical_crossentropy', metrics=['accuracy'])
+webcam = cv2.VideoCapture(0)
+labels = {0: 'angry', 1: 'disgust', 2: 'fear', 3: 'happy', 4: 'neutral', 5: 'sad', 6: 'surprise'}
 
-    return model
+running = True  # Flag to control whether the program is running or not
 
+while running:
+    i, im = webcam.read()
+    gray = cv2.cvtColor(im, cv2.COLOR_BGR2GRAY)
+    faces = face_cascade.detectMultiScale(im, 1.3, 5)
+    
+    for (p, q, r, s) in faces:
+        image = gray[q:q+s, p:p+r]
+        cv2.rectangle(im, (p, q), (p+r, q+s), (255, 0, 0), 2)
+        image = cv2.resize(image, (48, 48))
+        img = extract_features(image)
+        pred = model.predict(img)
+        prediction_label = labels[pred.argmax()]
+        cv2.putText(im, '% s' % (prediction_label), (p-10, q-10), cv2.FONT_HERSHEY_COMPLEX_SMALL, 2, (0, 0, 255))
+    
+    cv2.imshow("Output", im)
+    key = cv2.waitKey(27)
+    if key == ord('q'):  # Press 'q' to quit
+        running = False
 
-top = tk.Tk()
-top.geometry('800x600')
-top.title('Emotion Detector')
-top.configure(background='#CDCDCD')
-
-label1 = Label(top, background='#CDCDCD', font=('arial', 15, 'bold'))
-sign_image = Label(top)
-
-
-facec = cv2.CascadeClassifier('haarcascade_frontalface_default.xml')
-
-
-model = FacialExpressionModel("model_a1.json", "model_weights.weights.h5")
-
-
-EMOTIONS_LIST = ["Angry", "Disgust", "Fear",
-                 "Happy", "Neutral", "Sad", "Surprise"]
-
-
-def Detect(file_path):
-    global Label_packed
-
-    image = cv2.imread(file_path)
-    gray_image = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
-    faces = facec.detectMultiScale(gray_image, 1.3, 5)
-    try:
-        for (x, y, w, h) in faces:
-            fc = gray_image[y:y+h, x:x+w]
-            roi = cv2.resize(fc, (48, 48))
-            pred = EMOTIONS_LIST[np.argmax(
-                model.predict(roi[np.newaxis, :, :, np.newaxis]))]
-
-        print("Predicted Emotion is" + pred)
-        label1.configure(foreground="#011638", text=pred)
-    except:
-        label1.configure(foreground="#011638", text="Unable to detect")
-
-
-def show_Detect_button(file_path):
-    detect_b = Button(top, text="Detect Emotion",
-                      command=lambda: Detect(file_path), padx=10, pady=5)
-    detect_b.configure(background="#364156",
-                       foreground='white', font=('arial', 10, 'bold'))
-    detect_b.place(relx=0.79, rely=0.46)
-
-
-def upload_image():
-    try:
-        file_path = filedialog.askopenfilename()
-        uploaded = Image.open(file_path)
-        uploaded.thumbnail(
-            ((top.winfo_width()/2.25), (top.winfo_height()/2.25)))
-        im = ImageTk.PhotoImage(uploaded)
-
-        sign_image.configure(image=im)
-        sign_image.image = im
-        label1.configure(text='')
-        show_Detect_button(file_path)
-    except:
-        pass
-
-
-upload = Button(top, text="Upload Image",
-                command=upload_image, padx=10, pady=5)
-upload.configure(background="#364156", foreground='white',
-                 font=('arial', 20, 'bold'))
-upload.pack(side='bottom', pady=50)
-sign_image.pack(side='bottom', expand='True')
-label1.pack(side='bottom', expand='True')
-heading = Label(top, text='Emotion Detector',
-                pady=20, font=('arial', 25, 'bold'))
-heading.configure(background='#CDCDCD', foreground="#364156")
-heading.pack()
-top.mainloop()
+webcam.release()
+cv2.destroyAllWindows()
